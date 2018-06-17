@@ -1,0 +1,156 @@
+/* nano_lib - ESP32 Any functions related to seed/private keys for Nano
+ Copyright (C) 2018  Brian Pugh, James Coxon, Michael Smaili
+ https://www.joltwallet.com/
+ 
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 3 of the License, or
+ (at your option) any later version.
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software Foundation,
+ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
+ */
+
+#ifndef __NANO_LIB_H__
+#define __NANO_LIB_H__
+
+#include "mbedtls/bignum.h"
+#include <stdbool.h>
+
+/* Structs (and Struct Prototypes)*/
+typedef struct{} block_t;
+
+/* Errors Nano Lib functions can return */
+typedef enum nl_err_t{
+    E_SUCCESS=0,
+    E_FAILURE,
+    E_NOT_IMPLEMENTED,
+    E_END_OF_FUNCTION,
+    E_INSUFFICIENT_BUF,
+    E_INVALID_ADDRESS,
+    E_UNDEFINED_BLOCK_TYPE,
+    E_INVALID_STRENGTH,
+    E_INVALID_MNEMONIC,
+    E_INVALID_MNEMONIC_LEN,
+    E_INVALID_CHECKSUM,
+    E_UNABLE_ALLOCATE_MEM,
+    E_NETWORK,
+} nl_err_t;
+
+/* Generic Definitions */
+#define CONFIDENTIAL // Way to mark sensitive data
+#define NUM_OF(x) (sizeof (x) / sizeof (*x))
+
+#define BIN_64 8
+#define BIN_128 16
+#define BIN_256 32
+#define BIN_512 64
+
+#define HEX_64 (2*BIN_64+1)
+#define HEX_128 (2*BIN_128+1)
+#define HEX_256 (2*BIN_256+1)
+#define HEX_512 (2*BIN_512+1)
+
+/* Constant Buffer Lengths */
+#define BALANCE_DEC_BUF_LEN 40
+#define ADDRESS_BUF_LEN 70
+#define ADDRESS_DATA_LEN 60 // Does NOT include null character
+#define BLOCK_BUF_LEN 512 // todo: optimize this number
+#define MNEMONIC_BUF_LEN (24 * 10 + 1)
+#define PASSPHRASE_BUF_LEN 256
+
+/* Useful Extra values */
+#define BURN_ADDRESS "xrb_1111111111111111111111111111111111111111111111111111hifc8npp"
+
+/* typedefs */
+// Todo: make bin/uint uniform
+typedef unsigned char bin64_t[BIN_64];
+typedef char hex64_t[HEX_64];
+
+typedef unsigned char uint128_t[BIN_128];
+typedef char hex128_t[HEX_128];
+
+typedef unsigned char uint256_t[BIN_256];
+typedef char hex256_t[HEX_256];
+
+typedef unsigned char uint512_t[BIN_512];
+typedef char hex512_t[HEX_512];
+
+typedef enum nl_block_type_t{
+    UNDEFINED=0, STATE, OPEN, CHANGE, SEND, RECEIVE
+} nl_block_type_t;
+
+typedef struct nl_block_t{
+    nl_block_type_t type;
+    uint256_t account;
+    uint256_t previous;
+    uint256_t representative;
+    uint64_t work;
+    uint512_t signature;
+    uint256_t link;
+    mbedtls_mpi balance;
+} nl_block_t;
+
+/* Lookup Tables */
+static const char const BASE32_ALPHABET[] = {
+        '1', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd',
+        'e', 'f', 'g', 'h', 'i', 'j', 'k', 'm', 'n', 'o', 'p', 'q',
+        'r', 's', 't', 'u', 'w', 'x', 'y', 'z' };
+
+static const uint8_t const BASE32_TABLE[] = {
+    0xff, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x08, 0x09, 0x0a,
+    0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0xff, 0x13,
+    0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0xff, 0x1c,
+    0x1d, 0x1e, 0x1f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x08,
+    0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12,
+    0xff, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b,
+    0xff, 0x1c, 0x1d, 0x1e, 0x1f };
+
+/* Function Prototypes */
+nl_err_t nl_public_to_address(char address_buf[], uint8_t address_buf_len, const uint256_t public_key);
+nl_err_t nl_address_to_public(uint256_t pub_key, const char address[]);
+nl_err_t nl_mpi_to_nano_double(mbedtls_mpi *amount_m, double *amount_d);
+
+void nl_block_init(nl_block_t *block);
+void nl_block_free(nl_block_t *block);
+void nl_block_copy(nl_block_t *dst, nl_block_t *src);
+bool nl_block_equal(nl_block_t *dst, nl_block_t *src);
+
+void nl_private_to_public(uint256_t pk, const uint256_t sk);
+void nl_seed_to_private(uint256_t priv_key, const uint256_t seed_bin,
+        uint32_t index);
+void nl_sign_detached(uint512_t sig,
+        const unsigned char m[], unsigned int mlen,
+        const uint256_t sk, const uint256_t pk);
+nl_err_t nl_verify_sig_detached(const uint512_t sig,
+        const unsigned char m[], unsigned int mlen,
+        const uint256_t pk);
+
+
+nl_err_t nl_block_sign(nl_block_t *block, const uint256_t private_key);
+nl_err_t nl_block_compute_hash(const nl_block_t *block, uint256_t hash);
+
+
+int16_t nl_search_wordlist(char *word, uint8_t word_len);
+nl_err_t nl_mnemonic_generate(char buf[], uint16_t buf_len, uint16_t strength);
+nl_err_t nl_entropy_to_mnemonic(char buf[], const uint16_t buf_len,
+        const uint256_t entropy, const uint16_t strength);
+nl_err_t nl_verify_mnemonic(const char mnemonic[]);
+nl_err_t nl_mnemonic_to_master_seed(uint512_t master_seed, 
+        const char mnemonic[], const char passphrase[]);
+void nl_master_seed_to_nano_private_key(uint256_t private_key, 
+        uint512_t master_seed, uint32_t index);
+
+nl_err_t nl_parse_server_work_string(hex64_t work_str, uint64_t *work_int);
+void nl_generate_server_work_string(hex64_t work, const uint64_t nonce);
+bool nl_pow_verify(uint256_t hash, uint64_t nonce);
+uint64_t nl_compute_local_pow(uint256_t hash, uint64_t nonce);
+
+#include "helpers.h"
+
+#endif
